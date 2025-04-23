@@ -89,10 +89,9 @@ from mcp.shared.session import RequestResponder
 logger = logging.getLogger(__name__)
 
 LifespanResultT = TypeVar("LifespanResultT")
-RequestT = TypeVar("RequestT")
 
 # This will be properly typed in each Server instance's context
-request_ctx: contextvars.ContextVar[RequestContext[ServerSession, Any, Any]] = (
+request_ctx: contextvars.ContextVar[RequestContext[ServerSession, Any]] = (
     contextvars.ContextVar("request_ctx")
 )
 
@@ -214,7 +213,7 @@ class Server(Generic[LifespanResultT]):
         )
 
     @property
-    def request_context(self) -> RequestContext[ServerSession, LifespanResultT, RequestT]:
+    def request_context(self) -> RequestContext[ServerSession, LifespanResultT]:
         """If called outside of a request context, this will raise a LookupError."""
         return request_ctx.get()
 
@@ -480,6 +479,7 @@ class Server(Generic[LifespanResultT]):
         # but also make tracing exceptions much easier during testing and when using
         # in-process servers.
         raise_exceptions: bool = False,
+        extra_metadata: dict[str, Any] | None = None,
     ):
         async with AsyncExitStack() as stack:
             lifespan_context = await stack.enter_async_context(self.lifespan(self))
@@ -490,6 +490,8 @@ class Server(Generic[LifespanResultT]):
             async with anyio.create_task_group() as tg:
                 async for message in session.incoming_messages:
                     logger.debug(f"Received message: {message}")
+                    if hasattr(message, "request_meta") and getattr(message, "request_meta"):
+                        message.request_meta.extra_metadata = extra_metadata
 
                     tg.start_soon(
                         self._handle_message,
@@ -507,7 +509,6 @@ class Server(Generic[LifespanResultT]):
         session: ServerSession,
         lifespan_context: LifespanResultT,
         raise_exceptions: bool = False,
-        request: RequestT | None = None
     ):
         with warnings.catch_warnings(record=True) as w:
             # TODO(Marcelo): We should be checking if message is Exception here.
@@ -517,7 +518,7 @@ class Server(Generic[LifespanResultT]):
                 ):
                     with responder:
                         await self._handle_request(
-                            message, req, session, lifespan_context, raise_exceptions, request
+                            message, req, session, lifespan_context, raise_exceptions
                         )
                 case types.ClientNotification(root=notify):
                     await self._handle_notification(notify)
@@ -532,7 +533,6 @@ class Server(Generic[LifespanResultT]):
         session: ServerSession,
         lifespan_context: LifespanResultT,
         raise_exceptions: bool,
-        request: RequestT | None
     ):
         logger.info(f"Processing request of type {type(req).__name__}")
         if type(req) in self.request_handlers:
@@ -549,7 +549,6 @@ class Server(Generic[LifespanResultT]):
                         message.request_meta,
                         session,
                         lifespan_context,
-                        request
                     )
                 )
                 response = await handler(req)

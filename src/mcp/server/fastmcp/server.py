@@ -492,7 +492,6 @@ class FastMCP:
                     streams[0],
                     streams[1],
                     self._mcp_server.create_initialization_options(),
-                    request
                 )
 
         return Starlette(
