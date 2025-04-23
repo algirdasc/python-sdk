@@ -89,9 +89,10 @@ from mcp.shared.session import RequestResponder
 logger = logging.getLogger(__name__)
 
 LifespanResultT = TypeVar("LifespanResultT")
+RequestT = TypeVar("RequestT")
 
 # This will be properly typed in each Server instance's context
-request_ctx: contextvars.ContextVar[RequestContext[ServerSession, Any]] = (
+request_ctx: contextvars.ContextVar[RequestContext[ServerSession, Any, Any]] = (
     contextvars.ContextVar("request_ctx")
 )
 
@@ -213,7 +214,7 @@ class Server(Generic[LifespanResultT]):
         )
 
     @property
-    def request_context(self) -> RequestContext[ServerSession, LifespanResultT]:
+    def request_context(self) -> RequestContext[ServerSession, LifespanResultT, RequestT]:
         """If called outside of a request context, this will raise a LookupError."""
         return request_ctx.get()
 
@@ -506,6 +507,7 @@ class Server(Generic[LifespanResultT]):
         session: ServerSession,
         lifespan_context: LifespanResultT,
         raise_exceptions: bool = False,
+        request: RequestT | None = None
     ):
         with warnings.catch_warnings(record=True) as w:
             # TODO(Marcelo): We should be checking if message is Exception here.
@@ -515,7 +517,7 @@ class Server(Generic[LifespanResultT]):
                 ):
                     with responder:
                         await self._handle_request(
-                            message, req, session, lifespan_context, raise_exceptions
+                            message, req, session, lifespan_context, raise_exceptions, request
                         )
                 case types.ClientNotification(root=notify):
                     await self._handle_notification(notify)
@@ -530,6 +532,7 @@ class Server(Generic[LifespanResultT]):
         session: ServerSession,
         lifespan_context: LifespanResultT,
         raise_exceptions: bool,
+        request: RequestT | None
     ):
         logger.info(f"Processing request of type {type(req).__name__}")
         if type(req) in self.request_handlers:
@@ -546,6 +549,7 @@ class Server(Generic[LifespanResultT]):
                         message.request_meta,
                         session,
                         lifespan_context,
+                        request
                     )
                 )
                 response = await handler(req)
