@@ -16,14 +16,14 @@ DEFAULT_CLIENT_INFO = types.Implementation(name="mcp", version="0.1.0")
 class SamplingFnT(Protocol):
     async def __call__(
         self,
-        context: RequestContext["ClientSession", Any, Any],
+        context: RequestContext["ClientSession", Any],
         params: types.CreateMessageRequestParams,
     ) -> types.CreateMessageResult | types.ErrorData: ...
 
 
 class ListRootsFnT(Protocol):
     async def __call__(
-        self, context: RequestContext["ClientSession", Any, Any]
+        self, context: RequestContext["ClientSession", Any]
     ) -> types.ListRootsResult | types.ErrorData: ...
 
 
@@ -52,7 +52,7 @@ async def _default_message_handler(
 
 
 async def _default_sampling_callback(
-    context: RequestContext["ClientSession", Any, Any],
+    context: RequestContext["ClientSession", Any],
     params: types.CreateMessageRequestParams,
 ) -> types.CreateMessageResult | types.ErrorData:
     return types.ErrorData(
@@ -62,7 +62,7 @@ async def _default_sampling_callback(
 
 
 async def _default_list_roots_callback(
-    context: RequestContext["ClientSession", Any, Any],
+    context: RequestContext["ClientSession", Any],
 ) -> types.ListRootsResult | types.ErrorData:
     return types.ErrorData(
         code=types.INVALID_REQUEST,
