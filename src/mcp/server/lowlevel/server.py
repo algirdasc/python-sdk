@@ -490,7 +490,10 @@ class Server(Generic[LifespanResultT]):
             async with anyio.create_task_group() as tg:
                 async for message in session.incoming_messages:
                     logger.debug(f"Received message: {message}")
-                    if hasattr(message, "request_meta") and getattr(message, "request_meta"):
+                    if hasattr(message, "request_meta"):
+                        if getattr(message, "request_meta") is None:
+                            message.request_meta = types.RequestParams.Meta()
+
                         message.request_meta.extra_metadata = extra_metadata
 
                     tg.start_soon(
