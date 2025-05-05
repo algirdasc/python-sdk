@@ -14,7 +14,7 @@ from typing import Any, Generic, Literal
 
 import anyio
 import pydantic_core
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from pydantic.networks import AnyUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from starlette.applications import Starlette
@@ -40,6 +40,7 @@ from mcp.server.fastmcp.resources import FunctionResource, Resource, ResourceMan
 from mcp.server.fastmcp.tools import ToolManager
 from mcp.server.fastmcp.utilities.logging import configure_logging, get_logger
 from mcp.server.fastmcp.utilities.types import Image
+from mcp.server.fastmcp.utilities.http import RequestMiddleware, get_current_starlette_request
 from mcp.server.lowlevel.helper_types import ReadResourceContents
 from mcp.server.lowlevel.server import LifespanResultT
 from mcp.server.lowlevel.server import Server as MCPServer
@@ -556,10 +557,10 @@ class FastMCP:
         """Run the server using SSE transport."""
         import uvicorn
 
-        starlette_app = self.sse_app()
+        app = RequestMiddleware(self.sse_app())
 
         config = uvicorn.Config(
-            starlette_app,
+            app,
             host=self.settings.host,
             port=self.settings.port,
             log_level=self.settings.log_level.lower(),
@@ -760,6 +761,8 @@ class Context(BaseModel, Generic[ServerSessionT, LifespanContextT]):
     _request_context: RequestContext[ServerSessionT, LifespanContextT] | None
     _fastmcp: FastMCP | None
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     def __init__(
         self,
         *,
@@ -784,6 +787,14 @@ class Context(BaseModel, Generic[ServerSessionT, LifespanContextT]):
         if self._request_context is None:
             raise ValueError("Context is not available outside of a request")
         return self._request_context
+
+    @property
+    def starlette_request(self) -> Request:
+        """Get the active starlette request."""
+        request = get_current_starlette_request()
+        if request is None:
+            raise ValueError("Request is not available outside a Starlette request")
+        return request
 
     async def report_progress(
         self, progress: float, total: float | None = None
